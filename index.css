@@ -1,0 +1,12 @@
+#preview {
+    width: 100%;
+    max-width: 800px;
+}
+
+.invisible {
+    display: none;
+}
+
+h1 {
+    font-family: sans-serif;
+}
