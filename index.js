@@ -6,6 +6,8 @@ const startButton = document.getElementById("startButton");
 const stopButton = document.getElementById("stopButton");
 /** @type {HTMLInputElement} */
 const recordMicCheckbox = document.getElementById("record-mic");
+/** @type {HTMLInputElement} */
+const labelElement = document.getElementById("record-mic-label");
 /** @type {HTMLPreElement} */
 const logElement = document.getElementById("log");
 /** @type {number} */
@@ -83,30 +85,42 @@ function formatDuration(milliseconds) {
     }
     const seconds = milliseconds / 1000;
     if (seconds < 60) {
-        return `${seconds} seconds`;
+        return `${seconds.toFixed(2)} seconds`;
     }
     const minutes = seconds / 60;
-    return `${minutes} minutes and ${seconds % 60} seconds`;
+    return `${parseInt(minutes)} minutes and ${(seconds % 60).toFixed(2)} seconds`;
 }
 
+/**
+ * @returns {number}
+ */
 function onRecordStart() {
     window.onbeforeunload = (event) => event.preventDefault();
     startButton.classList.add("invisible");
+    recordMicCheckbox.classList.add("invisible");
+    labelElement.classList.add("invisible");
     stopButton.classList.remove("invisible");
     recordingStart = performance.now();
     log(`recording started 🔴`);
+    return { recordingStart };
 }
 
-function onRecordFinish() {
+/**
+ * @param {{fileHandle: FileSystemFileHandle, recordingStart: number}} param 
+ */
+async function onRecordFinish({ fileHandle, recordingStart }) {
     window.onbeforeunload = () => { };
+    preview.srcObject?.getTracks()?.forEach((track) => track.stop());
+
     preview.srcObject = null;
-    preview.src = URL.createObjectURL(fileHandle);
+    const file = await fileHandle.getFile();
+    preview.src = URL.createObjectURL(file);
     stopButton.classList.add("invisible");
     log(`recording stopped ⬛`);
     log(`Successfully recorded:`);
     log(`  ${fileHandle.name}`);
     log(`  ${formatDuration(performance.now() - recordingStart)}`);
-    log(`  ${formatFileSizeIEC(fileHandle.size)} of ${fileHandle.type} media.`);
+    log(`  ${formatFileSizeIEC(file.size)} of ${file.type} media.`);
 }
 
 async function main() {
@@ -125,21 +139,37 @@ async function main() {
         audio: true,
     });
 
+    let audioStream;
     if (recordMicCheckbox.checked) {
-        const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
         preview.srcObject = mergeVideoAndAudioStream(videoStream, audioStream);
     } else {
         preview.srcObject = videoStream;
     }
 
     await new Promise((resolve) => (preview.onplaying = resolve));
+    const { recordingStart } = onRecordStart();
 
-    onRecordStart();
+    // When the user clicks the "stop sharing" button that the browser provides,
+    // the stream ends silently.
+    // If that happens, we force the recording to stop.
+    const intervallId = setInterval(() => {
+        const videoTracks = preview.srcObject?.getVideoTracks();
+        const videoTrackEnded = !!videoTracks?.find(t => t.readyState === "ended");
+        if (videoTrackEnded || videoTracks === undefined || videoTracks === null) {
+            preview.srcObject?.getTracks()?.forEach((track) => track.stop());
+            audioStream?.getTracks()?.forEach((track) => track.stop());
+            videoStream?.getTracks()?.forEach((track) => track.stop());
+            clearInterval(intervallId);
+            return;
+        }
+    }, 1000);
+
     await record(preview.captureStream(), writableStream);
-    onRecordFinish();
+    await onRecordFinish({ recordingStart, fileHandle });
 }
 
 startButton.addEventListener("click", () => main().catch((e) => log(e)));
 stopButton.addEventListener("click", () =>
-    preview.srcObject.getTracks().forEach((track) => track.stop())
+    preview.srcObject.getTracks()?.forEach((track) => track.stop())
 );
