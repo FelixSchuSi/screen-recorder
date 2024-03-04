@@ -48,7 +48,9 @@ function mergeVideoAndAudioStream(videoStream, audioStream) {
     const audioContext = new AudioContext();
 
     const mediaStreamDestination = audioContext.createMediaStreamDestination();
-    audioContext.createMediaStreamSource(videoStream).connect(mediaStreamDestination);
+    if (videoStream.getAudioTracks().length > 0) {
+      audioContext.createMediaStreamSource(videoStream).connect(mediaStreamDestination);
+    }    
     audioContext.createMediaStreamSource(audioStream).connect(mediaStreamDestination);
 
     const mergedStream = new MediaStream();
