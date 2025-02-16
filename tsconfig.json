@@ -1,0 +1,10 @@
+{
+  "compilerOptions": {
+    "module": "system",
+    "noEmit": true,
+    "allowJs": true,
+    "checkJs": true,
+    "lib": ["ESNext", "DOM"]
+  },
+  "include": ["./**/*.js"]
+}
