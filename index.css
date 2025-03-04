@@ -1,12 +1,12 @@
 #preview {
-    width: 100%;
-    max-width: 800px;
+  width: 100%;
+  max-width: 800px;
 }
 
 .invisible {
-    display: none;
+  display: none;
 }
 
 * {
-    font-family: sans-serif;
+  font-family: sans-serif;
 }
