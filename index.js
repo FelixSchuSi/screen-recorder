@@ -1,4 +1,4 @@
-import { fixWebmDuration } from "./lib.js";
+import { fixWebmDuration } from "./lib/fixWebmDuration.js";
 
 const preview = /** @type {HTMLVideoElement} */ (
   document.getElementById("preview")
@@ -156,6 +156,7 @@ async function main() {
     video: {
       displaySurface: "monitor",
     },
+    // @ts-ignore
     systemAudio: "include",
     audio: true,
   });
@@ -195,8 +196,8 @@ async function main() {
   /** @type {Blob[]} */
   const chunks = [];
 
-  /** @type {MediaStream} */ // @ts-ignore
-  const captureStream =
+  /** @type {MediaStream} */
+  const captureStream = // @ts-ignore
     preview.captureStream?.() ?? preview.mozCaptureStream?.();
   await record(captureStream, chunks);
   const duration = performance.now() - recordingStart;
