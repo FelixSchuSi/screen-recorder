@@ -1,10 +1,13 @@
 {
   "compilerOptions": {
-    "module": "system",
-    "noEmit": true,
+    "target": "ES2022",
+    "module": "ES2022",
+    "moduleResolution": "bundler",
     "allowJs": true,
     "checkJs": true,
-    "lib": ["ESNext", "DOM"]
+    "strict": true,
+    "noEmit": true,
+    "lib": ["ES2022", "DOM"]
   },
-  "include": ["./**/*.js"]
+  "include": ["index.js", "lib/**/*.js"]
 }
