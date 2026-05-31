@@ -31,6 +31,7 @@ function log(msg) {
  * Records a Mediastream and writes it to a array of Blobs.
  * @param {MediaStream} mediaStream
  * @param {Blob[]} chunks
+ * @returns {Promise<void>}
  */
 function record(mediaStream, chunks) {
   return new Promise((resolve, reject) => {
@@ -157,6 +158,7 @@ async function main() {
     audio: true,
   });
 
+  /** @type {MediaStream | undefined} */
   let audioStream;
   if (recordMicCheckbox.checked) {
     audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
