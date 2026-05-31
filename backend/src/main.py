@@ -1,34 +1,15 @@
-"""
-Live transcription backend for screen-recorder.
-
-Run:
-    cd backend
-    uv sync
-    uv run python src/main.py
-
-Requires:
-    - NVIDIA GPU with CUDA 12 + cuDNN 9 (for faster-whisper GPU acceleration)
-    - uv (https://docs.astral.sh/uv/)
-"""
-
 from __future__ import annotations
-
 import asyncio
-import json
 import logging
-import sys
 from contextlib import asynccontextmanager
 from typing import Any
-
 import ctranslate2
 import numpy as np
 import uvicorn
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi.staticfiles import StaticFiles
 from faster_whisper import WhisperModel
 
-# ---------------------------------------------------------------------------
-# Logging
-# ---------------------------------------------------------------------------
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
@@ -36,9 +17,6 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# ---------------------------------------------------------------------------
-# Globals – model is loaded once on startup
-# ---------------------------------------------------------------------------
 MODEL: WhisperModel | None = None
 RATE = 16000  # Hz – expected sample rate from browser
 
@@ -49,8 +27,10 @@ async def lifespan(app: FastAPI):
     global MODEL
     device = "cuda" if ctranslate2.get_cuda_device_count() > 0 else "cpu"
     compute_type = "float16" if device == "cuda" else "int8"
-    logger.info("Loading faster-whisper large-v3-turbo on %s (%s)...", device, compute_type)
-    MODEL = WhisperModel("large-v3-turbo", device=device, compute_type=compute_type)
+    logger.info("Loading faster-whisper large-v3 on %s (%s)...", device, compute_type)
+    # faster but worse quality
+    # MODEL = WhisperModel("large-v3-turbo", device=device, compute_type=compute_type)
+    MODEL = WhisperModel("large-v3", device=device, compute_type=compute_type)
     logger.info("Model ready.")
     yield
     logger.info("Shutting down.")
@@ -59,22 +39,15 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="Screen Recorder Transcription", lifespan=lifespan)
 
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
 def _to_float32(audio_int16: bytes) -> np.ndarray:
     """Convert raw Int16 PCM bytes to float32 [-1.0, 1.0]."""
     arr = np.frombuffer(audio_int16, dtype=np.int16)
     return arr.astype(np.float32) / 32768.0
 
 
-# ---------------------------------------------------------------------------
-# Transcription session – one instance per WebSocket client
-# ---------------------------------------------------------------------------
 class TranscriptionSession:
-    def __init__(self, websocket: WebSocket, language: str | None) -> None:
+    def __init__(self, websocket: WebSocket) -> None:
         self.websocket = websocket
-        self.language = language  # None = auto-detect
         self.frames = np.array([], dtype=np.float32)
         self.timestamp_offset = 0.0  # seconds already committed
         self.committed_text = ""
@@ -119,7 +92,6 @@ class TranscriptionSession:
         assert MODEL is not None
         segs, _info = MODEL.transcribe(
             audio,
-            language=self.language,
             task="transcribe",
             vad_filter=True,
             beam_size=5,
@@ -191,27 +163,15 @@ class TranscriptionSession:
             self.interim_text = ""
         await self._send()
 
-
-# ---------------------------------------------------------------------------
-# Endpoints
-# ---------------------------------------------------------------------------
 @app.get("/health")
 async def health() -> dict[str, str]:
     return {"status": "ok"}
-
 
 @app.websocket("/ws/transcribe")
 async def transcribe_ws(websocket: WebSocket) -> None:
     await websocket.accept()
 
-    # 1. Receive client config (language, model, etc.)
-    raw = await websocket.receive_text()
-    config = json.loads(raw)
-    lang = config.get("language")
-    if lang == "auto":
-        lang = None
-
-    session = TranscriptionSession(websocket, lang)
+    session = TranscriptionSession(websocket)
     session.task = asyncio.create_task(session.run_loop())
 
     try:
@@ -233,9 +193,8 @@ async def transcribe_ws(websocket: WebSocket) -> None:
                 pass
         await session.finalize()
 
+# mounted *after* API routes so they don't shadow them
+app.mount("/", StaticFiles(directory="/app/static", html=True), name="static")
 
-# ---------------------------------------------------------------------------
-# Entry point
-# ---------------------------------------------------------------------------
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000, log_level="info")

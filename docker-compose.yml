@@ -1,0 +1,29 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+      network: host
+    ports:
+      - "8000:8000"
+      - "5678:5678"
+    volumes:
+      - ./backend/src:/app/src:ro
+      - ./backend/pyproject.toml:/app/pyproject.toml:ro
+      - ./index.html:/app/static/index.html:ro
+      - ./index.js:/app/static/index.js:ro
+      - ./index.css:/app/static/index.css:ro
+      - huggingface-cache:/root/.cache/huggingface
+    environment:
+      - DEBUG=0
+      - PYTHONUNBUFFERED=1
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+volumes:
+  huggingface-cache:

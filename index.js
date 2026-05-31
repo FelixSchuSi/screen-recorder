@@ -19,9 +19,6 @@ const logElement = /** @type {HTMLPreElement} */ (
 const enableTranscriptionCheckbox = /** @type {HTMLInputElement} */ (
   document.getElementById("enable-transcription")
 );
-const transcriptionLangSelect = /** @type {HTMLSelectElement} */ (
-  document.getElementById("transcription-lang")
-);
 const transcriptionPanel = /** @type {HTMLDivElement} */ (
   document.getElementById("transcription-panel")
 );
@@ -139,7 +136,6 @@ function onRecordStart() {
   recordMicCheckbox.classList.add("invisible");
   labelElement.classList.add("invisible");
   enableTranscriptionCheckbox.classList.add("invisible");
-  transcriptionLangSelect.classList.add("invisible");
   stopButton.classList.remove("invisible");
   recordingStart = performance.now();
   log(`recording started 🔴`);
@@ -200,8 +196,7 @@ function startTranscription(stream) {
   ws = new WebSocket("ws://localhost:8000/ws/transcribe");
 
   ws.onopen = () => {
-    const lang = transcriptionLangSelect.value;
-    ws.send(JSON.stringify({ language: lang }));
+    // connection ready — audio data will be sent via onaudioprocess
   };
 
   ws.onmessage = (event) => {
@@ -255,9 +250,6 @@ function stopTranscription() {
     ws.close();
     ws = null;
   }
-  transcriptionPanel.classList.add("invisible");
-  committedEl.textContent = "";
-  interimEl.textContent = "";
 }
 
 async function main() {
