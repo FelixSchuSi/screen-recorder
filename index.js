@@ -16,8 +16,33 @@ const labelElement = /** @type {HTMLInputElement} */ (
 const logElement = /** @type {HTMLPreElement} */ (
   document.getElementById("log")
 );
+const enableTranscriptionCheckbox = /** @type {HTMLInputElement} */ (
+  document.getElementById("enable-transcription")
+);
+const transcriptionLangSelect = /** @type {HTMLSelectElement} */ (
+  document.getElementById("transcription-lang")
+);
+const transcriptionPanel = /** @type {HTMLDivElement} */ (
+  document.getElementById("transcription-panel")
+);
+const committedEl = /** @type {HTMLDivElement} */ (
+  document.getElementById("transcription-committed")
+);
+const interimEl = /** @type {HTMLSpanElement} */ (
+  document.getElementById("transcription-interim")
+);
+
 /** @type {number} */
 let recordingStart;
+
+/** @type {AudioContext | null} */
+let audioCtx = null;
+/** @type {ScriptProcessorNode | null} */
+let processor = null;
+/** @type {MediaStreamAudioSourceNode | null} */
+let audioSource = null;
+/** @type {WebSocket | null} */
+let ws = null;
 
 /**
  * Logs to an element on screen.
@@ -113,6 +138,8 @@ function onRecordStart() {
   startButton.classList.add("invisible");
   recordMicCheckbox.classList.add("invisible");
   labelElement.classList.add("invisible");
+  enableTranscriptionCheckbox.classList.add("invisible");
+  transcriptionLangSelect.classList.add("invisible");
   stopButton.classList.remove("invisible");
   recordingStart = performance.now();
   log(`recording started 🔴`);
@@ -148,6 +175,91 @@ async function onRecordFinish({ chunks, duration }) {
   log(`  ${formatDuration(duration)}`);
 }
 
+/**
+ * Start streaming audio from the given MediaStream to the transcription backend.
+ * @param {MediaStream} stream
+ */
+function startTranscription(stream) {
+  if (!enableTranscriptionCheckbox.checked) return;
+
+  transcriptionPanel.classList.remove("invisible");
+  committedEl.textContent = "";
+  interimEl.textContent = "";
+
+  audioCtx = new AudioContext({ sampleRate: 48000 });
+  audioSource = audioCtx.createMediaStreamSource(stream);
+  processor = audioCtx.createScriptProcessor(4096, 1, 1);
+
+  // Keep graph active but silent
+  const zeroGain = audioCtx.createGain();
+  zeroGain.gain.value = 0;
+  audioSource.connect(processor);
+  processor.connect(zeroGain);
+  zeroGain.connect(audioCtx.destination);
+
+  ws = new WebSocket("ws://localhost:8000/ws/transcribe");
+
+  ws.onopen = () => {
+    const lang = transcriptionLangSelect.value;
+    ws.send(JSON.stringify({ language: lang }));
+  };
+
+  ws.onmessage = (event) => {
+    const msg = JSON.parse(event.data);
+    if (msg.type === "transcript") {
+      committedEl.textContent = msg.committed;
+      interimEl.textContent = msg.interim;
+    }
+  };
+
+  ws.onerror = () => {
+    log("transcription websocket error");
+  };
+
+  ws.onclose = () => {
+    log("transcription disconnected");
+  };
+
+  processor.onaudioprocess = (e) => {
+    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+
+    const inputData = e.inputBuffer.getChannelData(0); // 48 kHz float32
+    // Downsample to 16 kHz (factor 3)
+    const downLen = Math.floor(inputData.length / 3);
+    const int16 = new Int16Array(downLen);
+    for (let i = 0; i < downLen; i++) {
+      const s = Math.max(-1, Math.min(1, inputData[i * 3]));
+      int16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+    }
+    ws.send(int16.buffer);
+  };
+}
+
+/**
+ * Clean up transcription resources.
+ */
+function stopTranscription() {
+  if (processor) {
+    processor.disconnect();
+    processor = null;
+  }
+  if (audioSource) {
+    audioSource.disconnect();
+    audioSource = null;
+  }
+  if (audioCtx) {
+    audioCtx.close();
+    audioCtx = null;
+  }
+  if (ws) {
+    ws.close();
+    ws = null;
+  }
+  transcriptionPanel.classList.add("invisible");
+  committedEl.textContent = "";
+  interimEl.textContent = "";
+}
+
 async function main() {
   const videoStream = await navigator.mediaDevices.getDisplayMedia({
     video: {
@@ -167,6 +279,8 @@ async function main() {
     preview.srcObject = videoStream;
   }
 
+  startTranscription(/** @type {MediaStream} */ (preview.srcObject));
+
   await new Promise((resolve) => (preview.onplaying = resolve));
   const { recordingStart } = onRecordStart();
 
@@ -181,6 +295,7 @@ async function main() {
       (t) => t.readyState === "ended",
     );
     if (videoTrackEnded || videoTracks === undefined || videoTracks === null) {
+      stopTranscription();
       /** @type {MediaStream} */ (preview.srcObject)
         ?.getTracks()
         ?.forEach((track) => track.stop());
@@ -199,12 +314,17 @@ async function main() {
     preview.captureStream?.() ?? preview.mozCaptureStream?.();
   await record(captureStream, chunks);
   const duration = performance.now() - recordingStart;
+  stopTranscription();
   await onRecordFinish({ chunks, duration });
 }
 
-startButton.addEventListener("click", () => main().catch((e) => log(e)));
-stopButton.addEventListener("click", () =>
+startButton.addEventListener("click", () => main().catch((e) => {
+  log(e);
+  stopTranscription();
+}));
+stopButton.addEventListener("click", () => {
+  stopTranscription();
   /** @type {MediaStream} */ (preview.srcObject)
     ?.getTracks()
-    ?.forEach((track) => track.stop()),
-);
+    ?.forEach((track) => track.stop());
+});

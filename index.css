@@ -10,3 +10,20 @@
 * {
   font-family: sans-serif;
 }
+
+#transcription-panel {
+  margin-top: 1rem;
+  padding: 1rem;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  min-height: 80px;
+  max-width: 800px;
+  font-size: 1.1rem;
+  line-height: 1.5;
+  background: #fafafa;
+}
+
+#transcription-interim {
+  color: #888;
+  font-style: italic;
+}

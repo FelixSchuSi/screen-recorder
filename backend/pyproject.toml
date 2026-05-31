@@ -1,0 +1,11 @@
+[project]
+name = "screen-recorder-backend"
+version = "0.1.0"
+description = "Live transcription backend for screen recorder"
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    "faster-whisper>=1.2.0",
+    "numpy>=1.26",
+]
