@@ -1,5 +1,3 @@
-import { fixWebmDuration } from "./lib/fixWebmDuration.js";
-
 const preview = /** @type {HTMLVideoElement} */ (
   document.getElementById("preview")
 );
@@ -57,7 +55,6 @@ function mergeVideoAndAudioStream(videoStream, audioStream) {
 
   const mediaStreamDestination = audioContext.createMediaStreamDestination();
   if (videoStream.getAudioTracks().length > 0) {
-    debugger;
     audioContext
       .createMediaStreamSource(videoStream)
       .connect(mediaStreamDestination);
@@ -130,12 +127,11 @@ async function onRecordFinish({ chunks, duration }) {
     ?.getTracks()
     ?.forEach((track) => track.stop());
   preview.srcObject = null;
-  const buggyBlob = new Blob(chunks, {
+  const blob = new Blob(chunks, {
     type: "video/webm",
   });
 
-  const newBlob = await fixWebmDuration(buggyBlob, duration);
-  preview.src = URL.createObjectURL(newBlob);
+  preview.src = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.style.display = "none";
   a.href = preview.src;
@@ -147,7 +143,7 @@ async function onRecordFinish({ chunks, duration }) {
   stopButton.classList.add("invisible");
   log(`recording stopped ⬛`);
   log(`Successfully recorded:`);
-  log(`  ${formatFileSizeIEC(newBlob.size)} of ${buggyBlob.type}`);
+  log(`  ${formatFileSizeIEC(blob.size)} of ${blob.type}`);
   log(`  ${formatDuration(duration)}`);
 }
 
