@@ -1,14 +1,11 @@
-# CUDA 12 + cuDNN 9 runtime (matches faster-whisper / ctranslate2 requirements)
-FROM nvidia/cuda:12.6.3-cudnn-runtime-ubuntu24.04
+# Lightweight CPU-only backend (GPU inference is handled by vLLM)
+FROM python:3.12-slim
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONUNBUFFERED=1
 
-# Install Python 3.12 (default on 24.04) and system tools
+# Install curl (required by uv installer) and ca-certificates
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    python3 \
-    python3-venv \
-    python3-pip \
     curl \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*

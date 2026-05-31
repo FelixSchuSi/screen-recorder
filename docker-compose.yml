@@ -1,4 +1,25 @@
 services:
+  vllm:
+    build:
+      context: .
+      dockerfile: vllm/Dockerfile
+    ports:
+      - "8003:8003"
+    command: >
+      openai/whisper-large-v3
+      --port 8003
+      --dtype float16
+      --gpu-memory-utilization 0.8
+    volumes:
+      - huggingface-cache:/root/.cache/huggingface
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
   backend:
     build:
       context: .
@@ -13,17 +34,13 @@ services:
       - ./index.html:/app/static/index.html:ro
       - ./index.js:/app/static/index.js:ro
       - ./index.css:/app/static/index.css:ro
-      - huggingface-cache:/root/.cache/huggingface
     environment:
       - DEBUG=0
       - PYTHONUNBUFFERED=1
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
+      - VLLM_BASE_URL=http://vllm:8003
+      - VLLM_MODEL=openai/whisper-large-v3
+    depends_on:
+      - vllm
 
 volumes:
   huggingface-cache:
