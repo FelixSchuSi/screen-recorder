@@ -1,5 +1,0 @@
-services:
-  backend:
-    environment:
-      - DEBUG=1
-      - WAIT_FOR_CLIENT=1
